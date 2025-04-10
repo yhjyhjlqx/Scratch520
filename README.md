@@ -11,7 +11,7 @@
 - 支持Windows/macOS/Linux
 
 ## Raw分发
-
+https://raw.githubusercontent.com/yhjyhjlqx/Scratch520/main/hosts
 
 ## 安装
 

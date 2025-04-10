@@ -1,0 +1,78 @@
+name: Create Scratch520 Release
+
+on:
+  push:
+    tags: ['v*']  # 只在推送v开头的tag时触发
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 第一步：检查tag情况（如果是手动触发且没有tag时创建临时tag）
+      - name: Check and create tag if needed
+        if: github.event_name == 'workflow_dispatch' && !contains(github.ref, 'tags/')
+        run: |
+          echo "Creating temporary tag for workflow dispatch..."
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          TAG_NAME="v0.0.0-workflow-${{ github.run_id }}"
+          git tag -a $TAG_NAME -m "Temporary tag for workflow dispatch"
+          git push origin $TAG_NAME
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
+      # 第二步：检出代码（使用正确的ref）
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref || env.TAG_NAME || 'main' }}
+
+      # 第三步：准备发布包
+      - name: Prepare release package
+        run: |
+          # 创建release_package目录
+          mkdir -p release_package
+          
+          # 复制各平台脚本（检查文件是否存在）
+          [ -f scripts/windows_update.ps1 ] && cp scripts/windows_update.ps1 release_package/ || echo "Windows script not found"
+          [ -f scripts/macos_update.sh ] && cp scripts/macos_update.sh release_package/ || echo "macOS script not found"
+          [ -f scripts/linux_update.sh ] && cp scripts/linux_update.sh release_package/ || echo "Linux script not found"
+          
+          # 复制hosts文件
+          cp hosts release_package/
+          
+          # 打包成ZIP
+          zip -r Scratch520_Scripts.zip release_package/
+          
+          # 显示打包内容
+          echo "Package contents:"
+          unzip -l Scratch520_Scripts.zip
+
+      # 第四步：创建GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Scratch520_Scripts.zip
+          tag_name: ${{ github.ref_name || env.TAG_NAME || 'v0.0.0-fallback' }}
+          name: Scratch520 Release ${{ github.ref_name || env.TAG_NAME || 'v0.0.0-fallback' }}
+          body: |
+            ### Scratch520 脚本发布包 - ${{ github.ref_name || env.TAG_NAME || '临时版本' }}
+            
+            **包含文件：**
+            - Windows更新脚本 (windows_update.ps1)
+            - macOS更新脚本 (macos_update.sh)
+            - Linux更新脚本 (linux_update.sh)
+            - 最新hosts文件
+            
+            **使用说明：**
+            1. 下载此ZIP包
+            2. 解压后运行对应平台的脚本
+            3. 更多帮助请参考[README](https://github.com/${{ github.repository }}#使用方法)
+            
+            **自动生成时间：** ${{ steps.prepare.outputs.current_date }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,34 @@
+name: Create Scratch520 Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          mkdir -p release_package
+          [ -f scripts/windows_update.ps1 ] && cp scripts/windows_update.ps1 release_package/
+          [ -f scripts/macos_update.sh ] && cp scripts/macos_update.sh release_package/
+          [ -f scripts/linux_update.sh ] && cp scripts/linux_update.sh release_package/
+          cp hosts release_package/
+          zip -r Scratch520_Scripts.zip release_package/
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: Scratch520_Scripts.zip
+          body: |
+            ### Scratch520 脚本包
+            
+            包含:
+            - Windows脚本 (windows_update.ps1)
+            - macOS脚本 (macos_update.sh) 
+            - Linux脚本 (linux_update.sh)
+            - 最新hosts文件
+            
+            使用说明: https://github.com/yhjyhjlqx/Scratch520#使用方法
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

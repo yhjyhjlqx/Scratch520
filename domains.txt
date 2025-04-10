@@ -1,0 +1,20 @@
+# Scratch 主域名
+scratch.mit.edu
+scratch.edu
+
+# API 和服务域名
+api.scratch.mit.edu
+projects.scratch.mit.edu
+assets.scratch.mit.edu
+
+# CDN 和资源
+cdn.assets.scratch.mit.edu
+cdn.projects.scratch.mit.edu
+
+# 社区和社交
+community.scratch.mit.edu
+discuss.scratch.mit.edu
+
+# 防止重定向的域名
+scratchcn.com
+scratch-cn.org

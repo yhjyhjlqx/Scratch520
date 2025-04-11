@@ -2,77 +2,92 @@ name: Create Scratch520 Release
 
 on:
   push:
-    tags: ['v*']  # 只在推送v开头的tag时触发
+    tags: ['v*']  # 仅当推送v开头的tag时触发
   workflow_dispatch:  # 允许手动触发
 
 jobs:
   build-release:
     runs-on: ubuntu-latest
-    
-    steps:
-      # 第一步：检查tag情况（如果是手动触发且没有tag时创建临时tag）
-      - name: Check and create tag if needed
-        if: github.event_name == 'workflow_dispatch' && !contains(github.ref, 'tags/')
-        run: |
-          echo "Creating temporary tag for workflow dispatch..."
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          TAG_NAME="v0.0.0-workflow-${{ github.run_id }}"
-          git tag -a $TAG_NAME -m "Temporary tag for workflow dispatch"
-          git push origin $TAG_NAME
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+    timeout-minutes: 10
 
-      # 第二步：检出代码（使用正确的ref）
-      - name: Checkout code
+    steps:
+      # 第一步：必须先检出代码（关键修复点）
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.ref || env.TAG_NAME || 'main' }}
+          fetch-depth: 0  # 获取完整git历史记录
+          ref: ${{ github.ref_name || 'main' }}
 
-      # 第三步：准备发布包
-      - name: Prepare release package
+      # 第二步：手动触发时创建临时tag
+      - name: Create temporary tag (if manual trigger)
+        if: github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
         run: |
-          # 创建release_package目录
-          mkdir -p release_package
-          
-          # 复制各平台脚本（检查文件是否存在）
-          [ -f scripts/windows_update.ps1 ] && cp scripts/windows_update.ps1 release_package/ || echo "Windows script not found"
-          [ -f scripts/macos_update.sh ] && cp scripts/macos_update.sh release_package/ || echo "macOS script not found"
-          [ -f scripts/linux_update.sh ] && cp scripts/linux_update.sh release_package/ || echo "Linux script not found"
-          
-          # 复制hosts文件
-          cp hosts release_package/
-          
-          # 打包成ZIP
-          zip -r Scratch520_Scripts.zip release_package/
-          
-          # 显示打包内容
-          echo "Package contents:"
-          unzip -l Scratch520_Scripts.zip
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          TAG_NAME="v0.0.0-manual-${{ github.run_id }}"
+          git tag -a "$TAG_NAME" -m "Temporary tag for manual workflow dispatch"
+          git push origin "$TAG_NAME"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "Created temporary tag: $TAG_NAME"
 
-      # 第四步：创建GitHub Release
-      - name: Create GitHub Release
+      # 第三步：验证环境
+      - name: Verify environment
+        run: |
+          echo "Current branch: ${{ github.ref }}"
+          echo "Current tag: ${{ github.ref_name }}"
+          git status
+          ls -la
+
+      # 第四步：准备发布包（增强容错）
+      - name: Prepare release assets
+        run: |
+          # 创建目录结构
+          mkdir -p release_package/scripts
+          
+          # 复制文件（带错误忽略）
+          cp -f hosts release_package/ || echo "⚠️ hosts file missing"
+          [ -f scripts/windows_update.ps1 ] && cp scripts/windows_update.ps1 release_package/scripts/
+          [ -f scripts/macos_update.sh ] && cp scripts/macos_update.sh release_package/scripts/
+          [ -f scripts/linux_update.sh ] && cp scripts/linux_update.sh release_package/scripts/
+
+          # 打包并验证
+          zip -r Scratch520_Scripts.zip release_package/
+          unzip -l Scratch520_Scripts.zip
+          echo "::notice:: Package prepared successfully"
+
+      # 第五步：创建GitHub Release
+      - name: Publish Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             Scratch520_Scripts.zip
           tag_name: ${{ github.ref_name || env.TAG_NAME || 'v0.0.0-fallback' }}
-          name: Scratch520 Release ${{ github.ref_name || env.TAG_NAME || 'v0.0.0-fallback' }}
+          name: Scratch520 ${{ github.ref_name || env.TAG_NAME || 'Manual Release' }}
           body: |
-            ### Scratch520 脚本发布包 - ${{ github.ref_name || env.TAG_NAME || '临时版本' }}
-            
+            ### 🚀 自动生成的发布包
+
             **包含文件：**
-            - Windows更新脚本 (windows_update.ps1)
-            - macOS更新脚本 (macos_update.sh)
-            - Linux更新脚本 (linux_update.sh)
-            - 最新hosts文件
-            
-            **使用说明：**
-            1. 下载此ZIP包
-            2. 解压后运行对应平台的脚本
-            3. 更多帮助请参考[README](https://github.com/${{ github.repository }}#使用方法)
-            
-            **自动生成时间：** ${{ steps.prepare.outputs.current_date }}
+            - Windows脚本: `windows_update.ps1`
+            - macOS脚本: `macos_update.sh`
+            - Linux脚本: `linux_update.sh`
+            - 最新Hosts文件: `hosts`
+
+            **使用方式：**
+            1. 下载ZIP包并解压
+            2. 运行对应平台的脚本
+            3. 更多帮助见[README](https://github.com/${{ github.repository }}#使用方法)
+
+            **生成时间：** ${{ steps.prepare.outputs.current_date }}
           draft: false
-          prerelease: false
+          prerelease: ${{ !github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 第六步：清理和通知（可选）
+      - name: Cleanup
+        if: always()
+        run: |
+          echo "::group::工作目录内容"
+          ls -R
+          echo "::endgroup::"
+          echo "🎉 工作流已完成！"

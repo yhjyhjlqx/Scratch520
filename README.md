@@ -14,6 +14,7 @@
 https://raw.githubusercontent.com/yhjyhjlqx/Scratch520/main/hosts
 
 ## 安装
+https://vercel.com
 
 # Windows
 irm https://raw.githubusercontent.com/yhjyhjlqx/Scratch520/main/scripts/windows_update.ps1 | iex
